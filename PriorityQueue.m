@@ -87,46 +87,60 @@ classdef PriorityQueue < matlab.mixin.Copyable
             this.inner_list.Add(value);
             %             ev_t = this.inner_list(:).Time;
             %             ev_tp = this.inner_list(:).Type;
+            if this.Length <= 1
+                idx = 1;
+                if nargout == 2
+                    e = this.inner_list(end);
+                end
+                return;
+            end
+            b_swap = true;
             if strcmp(insert_opt, 'back')
                 for idx = this.Length:-1:2
-                    if  v < this.inner_list(idx-1).(this.priority_field)
-                        b_swap = true;
-                    else
-                        b_swap = false;
-                    end
                     if strcmp(this.sorttype, 'descend')
-                        b_swap = ~b_swap;
+                        if  v < this.inner_list(idx-1).(this.priority_field)
+                            b_swap = false;
+                        end
+                    else  % 'ascend'
+                        if  v > this.inner_list(idx-1).(this.priority_field)
+                            b_swap = false;
+                        end
                     end
                     if ~b_swap
                         break;
                     end
                 end
-                if ~isempty(idx)
-                    if b_swap
-                        idx = 1;
-                    end
+                if b_swap
+                    idx = 1;
                 end
             else
                 for idx = 1:(this.Length-1)
-                    if  v < this.inner_list(idx+1).(this.priority_field)
-                        b_swap = false;
-                    else
-                        b_swap = true;
-                    end
                     if strcmp(this.sorttype, 'descend')
-                        b_swap = ~b_swap;
+                        if  v > this.inner_list(idx).(this.priority_field)
+                            b_swap = false;
+                        end
+                    else
+                        if  v < this.inner_list(idx).(this.priority_field)
+                            b_swap = false;
+                        end
                     end
                     if ~b_swap
                         break;
                     end
                 end
+                %                 if b_swap
+                %                     idx = this.Length;
+                %                 end
             end
-            if ~isempty(idx) && idx < this.Length
+            %% DEBUG - TODO
+            % no matter 'back' or 'front', the new item is located at the end of the inner
+            % list.
+            % |idx| will not be empty, since we have chek it at start
+            if idx < this.Length        
                 temp = this.inner_list(end);
                 this.inner_list((idx+1):end) = this.inner_list(idx:(end-1));
                 this.inner_list(idx) = temp;
             end
-            
             if nargout == 2
                 e = this.inner_list(end);
             end
