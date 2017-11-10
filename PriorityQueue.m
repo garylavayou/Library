@@ -26,7 +26,6 @@ classdef PriorityQueue < matlab.mixin.Copyable
         function this = PriorityQueue(varargin)
             if isempty(varargin)
                 error('error: must be initiialized with known type.');
-                
             end
             if ischar(varargin{1})
                 type_name = varargin{1};
@@ -59,6 +58,20 @@ classdef PriorityQueue < matlab.mixin.Copyable
             end
         end
         
+        function delete(this)
+            delete(this.inner_list);
+        end
+    end
+    methods (Access = protected)
+        function this = copyElement(list)
+            % Make a shallow copy of all properties
+            this = copyElement@matlab.mixin.Copyable(list);
+            % Make a deep copy of the DeepCp object
+            this.inner_list = list.inner_list.copy;
+        end
+    end
+
+    methods
         function c = get.Capacity(this)
             c = this.inner_list.Capacity;
         end
@@ -274,15 +287,11 @@ classdef PriorityQueue < matlab.mixin.Copyable
         function Clear(this)
             this.inner_list.Clear();
         end
-    end
-    
-    methods (Access = protected)
-        function this = copyElement(list)
-            % Make a shallow copy of all properties
-            this = copyElement@matlab.mixin.Copyable(list);
-            % Make a deep copy of the DeepCp object
-            this.inner_list = list.inner_list.copy;
+        
+        function idx = Find(this, varargin)
+            idx = this.inner_list.Find(varargin{:});
         end
     end
+    
 end
 
