@@ -15,7 +15,9 @@ classdef ListArray < matlab.mixin.Copyable
 %             'uint8', 'uint16', 'uint32', 'uint64'};
 %     end
     
-    properties (GetAccess={?ListArray, ?PriorityQueue})     % Not know if subclass could access
+    properties (GetAccess={?ListArray, ?PriorityQueue})
+        % |storage_class| is initialized in the constructor, should not be changed after
+        % initialization  
         storage_class;
         st_length = 0;
         storage;
@@ -72,6 +74,31 @@ classdef ListArray < matlab.mixin.Copyable
             end
         end
         
+        function delete(this)
+            for i = 1:this.st_length
+                if ishandle(this.storage(i))
+                    delete(this.storage(i));
+                end
+            end
+        end
+    end
+    methods (Access = protected)
+        function this = copyElement(list)
+            % Make a shallow copy of all properties
+            this = copyElement@matlab.mixin.Copyable(list);
+            % Make a deep copy for handle memeber
+            if ismember('matlab.mixin.Copyable', superclasses(list.storage))
+                for i = 1:this.st_length
+                    this.storage(i) = list.storage(i).copy;
+                end
+            end
+        end
+        
+        function asserttype(this, value)
+            ListArray.ASSERTYPE(class(value), this.TypeName);
+        end
+    end    
+    methods
         function c = get.Capacity(this)
             c = length(this.storage);
         end
@@ -79,15 +106,7 @@ classdef ListArray < matlab.mixin.Copyable
         function l = get.Length(this)
             l = this.st_length;
         end
-        
-        function c = get.storage_class(this)
-            if this.st_length > 0
-                c = metaclass(this.storage);
-            else
-                c = this.storage_class;
-            end
-        end
-        
+                
         function t = get.TypeName(this)
             t = this.storage_class.Name;
         end
@@ -256,7 +275,21 @@ classdef ListArray < matlab.mixin.Copyable
                 case '{}'
                     % TODO, to support Obj{'propName'} to return property of all the
                     % elements, like the Obj.propName.
-                    error('error: operation %s is not supported.', s(1).type);
+                    indices = s(1).subs;
+                    if length(indices) == 1
+                        idx = list.assertindex(indices{1});
+                        elements = list.storage(idx);
+                    else
+                        error('error: Multiple indices are not supported.');
+                    end
+                    if length(s) == 1
+                        varargout{1} = cell(length(elements),1);
+                        for i = 1:length(elements)
+                            varargout{1}{i} = elements(i);
+                        end
+                    else
+                        error('error: operation %s is not supported.', s(2).type);
+                    end
                 otherwise
                     error('error: operation %s is not supported.', s(1).type);
             end
@@ -268,8 +301,9 @@ classdef ListArray < matlab.mixin.Copyable
                     assertpermission('ListArray', s(1).subs, 'set');
                     list = builtin('subsasgn',list,s,v);
                 case '()'  % v is cell array
+                    % Presume that at least one subscription should be provided.
+                    indices = s(1).subs;
                     if length(s) == 1
-                        indices = s(1).subs;
                         if length(indices) == 1
                             idx = list.assertindex(indices{1});
                             if isempty(v)
@@ -279,6 +313,18 @@ classdef ListArray < matlab.mixin.Copyable
                             end
                         else
                             builtin('subsasgn',list,s,v);
+                        end
+                    elseif length(s) == 2 &&  isequal(s(2).type, '.')
+                        % If a method name is passed in, an error will be thorwn out.
+                        assertpermission(list.storage_class.Name, s(2).subs, 'set')
+                        idx = list.assertindex(indices{1});
+                        for i = 1:length(idx)
+                            %% ISSUE
+                            % ListArray has no access permission to the storage's private/protected
+                            % member, even if the caller have permission. To solve this problem, the
+                            % caller should first retrive the elements in the ListArray, then
+                            % directly access the elements' member.
+                            list.storage(idx(i)).(s(2).subs) = v(i);
                         end
                     else
                         builtin('subsasgn',list,s,v);
@@ -406,23 +452,6 @@ classdef ListArray < matlab.mixin.Copyable
 %                 values = [];
 %             end
 %         end
-    end
-    
-    methods (Access = protected)
-        function this = copyElement(list)
-            % Make a shallow copy of all properties
-            this = copyElement@matlab.mixin.Copyable(list);
-            % Make a deep copy for handle memeber
-            if ismember('matlab.mixin.Copyable', superclasses(list.storage))
-                for i = 1:this.st_length
-                    this.storage(i) = list.storage(i).copy;
-                end
-            end
-        end
-        
-        function asserttype(this, value)
-            ListArray.ASSERTYPE(class(value), this.TypeName);
-        end
     end
     
     methods(Static, Access = protected)
