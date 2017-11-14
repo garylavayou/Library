@@ -409,26 +409,53 @@ classdef ListArray < matlab.mixin.Copyable
         end
         
         function idx = Find(this, varargin)
-            idx = [];
-            if length(varargin)==1 && isa(varargin{1}, this.storage_class.Name)
+            if isempty(varargin)
+                error('error: missing arguments.');
+            end
+            if isa(varargin{1}, this.storage_class.Name)
+                if length(varargin)>=2 && strcmpi(varargin{2}, 'all')
+                    b_all = true;
+                    idx = false(this.Length,1);
+                else
+                    b_all = false;
+                    idx = [];
+                end
                 elem = varargin{1};
                 for i = 1:this.st_length
                     if this.storage(i) == elem || isequal(this.storage(i), elem)
-                        idx = i;
-                        break;
+                        if b_all
+                            idx(i) = true;
+                        else
+                            idx = i;
+                            break;
+                        end
                     end
                 end
-            elseif length(varargin)==2 && ischar(varargin{1})
+            elseif length(varargin)>=2 && ischar(varargin{1})
                 field = varargin{1};
                 value = varargin{2};
+                if length(varargin)>=3 && strcmpi(varargin{3}, 'all')
+                    b_all = true;
+                    idx = false(this.Length,1);
+                else
+                    b_all = false;
+                    idx = [];
+                end
                 for i = 1:this.st_length
                     if this.storage(i).(field) == value
-                        idx = i;
-                        break;
+                        if b_all
+                            idx(i) = true;
+                        else
+                            idx = i;
+                            break;
+                        end
                     end
                 end
             else
-                error('error: invalid invoking form.');
+                error('error: invalid arguments.');
+            end
+            if b_all
+                idx = find(idx);
             end
         end
         
