@@ -141,9 +141,9 @@ classdef PriorityQueue < matlab.mixin.Copyable
                         break;
                     end
                 end
-                %                 if b_swap
-                %                     idx = this.Length;
-                %                 end
+                if b_swap  % no exchange, |idx| set to the last element, so the last step will not be executed.
+                    idx = this.Length;
+                end
             end
             %% DEBUG - TODO
             % no matter 'back' or 'front', the new item is located at the end of the inner
