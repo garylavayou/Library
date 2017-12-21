@@ -39,7 +39,7 @@ classdef ListArray < matlab.mixin.Copyable
         %        must be object array.
         function this = ListArray(varargin)
             if isempty(varargin)
-                warning('ListArray is initiialized with specifed type (default double).');
+                warning('ListArray is initialized with specifed type (default double).');
             end
             if ischar(varargin{1})
                 type_name = varargin{1};
