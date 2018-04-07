@@ -91,31 +91,39 @@ classdef PriorityQueue < matlab.mixin.Copyable
         %%%
         % idx: the added element's index in the queue
         % e: the last element of the queue.
-        function [idx, e] = PushBack(this, value, insert_opt)
-            if nargin < 3
-                insert_opt = 'back';
-            end
-            v = value.(this.priority_field);
+        function [idxs, e] = PushBack(this, value)
+            v = [value.(this.priority_field)];
             assert(~isempty(v), 'compare field is empty.');
-            this.inner_list.Add(value);
             %             ev_t = this.inner_list(:).Time;
             %             ev_tp = this.inner_list(:).Type;
-            if this.Length <= 1
-                idx = 1;
+            if length(v) > 1
+                [v,idx_sort] = sort(v, this.sorttype);
+                value = value(idx_sort);
+            else
+                idx_sort = 1;
+            end
+            old_len = this.Length;
+            this.inner_list.Add(value);
+            if old_len == 0
+                idxs = 1;
                 if nargout == 2
                     e = this.inner_list(end);
                 end
                 return;
+            else
+                idxs = zeros(length(v),1);
             end
-            b_swap = true;
-            if strcmp(insert_opt, 'back')
-                for idx = this.Length:-1:2
+            j = 1;
+            for tmp_len = (old_len+1):this.Length
+                b_swap = true;
+                vt = v(tmp_len-old_len);
+                for idx = tmp_len:-1:2
                     if strcmp(this.sorttype, 'descend')
-                        if  v < this.inner_list(idx-1).(this.priority_field)
+                        if  vt < this.inner_list(idx-1).(this.priority_field)
                             b_swap = false;
                         end
                     else  % 'ascend'
-                        if  v > this.inner_list(idx-1).(this.priority_field)
+                        if  vt > this.inner_list(idx-1).(this.priority_field)
                             b_swap = false;
                         end
                     end
@@ -126,14 +134,58 @@ classdef PriorityQueue < matlab.mixin.Copyable
                 if b_swap
                     idx = 1;
                 end
+                if ~b_swap && idx == tmp_len
+                    % no need to exchange, the queue is sorted.
+                    idxs(idx_sort(j:end)) = idx:this.Length;
+                    break;
+                end
+                % |idx| will not be empty, since we have chek it at start
+                if idx < tmp_len
+                    temp = this.inner_list(tmp_len);
+                    this.inner_list((idx+1):tmp_len) = this.inner_list(idx:(tmp_len-1));
+                    this.inner_list(idx) = temp;
+                end
+                idxs(idx_sort(j)) = idx;
+                j = j + 1;
+            end
+            if nargout == 2
+                e = this.inner_list(end);
+            end
+        end
+        
+        function [idxs, e] = PushFront(this, value)
+            v = [value.(this.priority_field)];
+            assert(~isempty(v), 'compare field is empty.');
+            %             ev_t = this.inner_list(:).Time;
+            %             ev_tp = this.inner_list(:).Type;
+            if length(v) > 1
+                [v,idx_sort] = sort(v, this.sorttype);
+                value = value(idx_sort);
             else
-                for idx = 1:(this.Length-1)
+                idx_sort = 1;
+            end
+            old_len = this.Length;
+            this.inner_list.Insert(value, 1);
+            if old_len == 0
+                idxs = 1;
+                if nargout == 2
+                    e = this.inner_list(end);
+                end
+                return;
+            else
+                idxs = zeros(length(v),1);
+            end
+            j = length(v);
+            for tmp_len = length(v):-1:1
+                b_swap = true;
+                vt = v(tmp_len);
+                for idx = tmp_len:(this.Length-1)
                     if strcmp(this.sorttype, 'descend')
-                        if  v > this.inner_list(idx).(this.priority_field)
+                        if  vt > this.inner_list(idx+1).(this.priority_field)
                             b_swap = false;
                         end
                     else
-                        if  v < this.inner_list(idx).(this.priority_field)
+                        if  vt < this.inner_list(idx+1).(this.priority_field)
                             b_swap = false;
                         end
                     end
@@ -144,15 +196,19 @@ classdef PriorityQueue < matlab.mixin.Copyable
                 if b_swap  % no exchange, |idx| set to the last element, so the last step will not be executed.
                     idx = this.Length;
                 end
-            end
-            %% DEBUG - TODO
-            % no matter 'back' or 'front', the new item is located at the end of the inner
-            % list.
-            % |idx| will not be empty, since we have chek it at start
-            if idx < this.Length        
-                temp = this.inner_list(end);
-                this.inner_list((idx+1):end) = this.inner_list(idx:(end-1));
-                this.inner_list(idx) = temp;
+                %% DEBUG - TODO
+                % |idx| will not be empty, since we have chek it at start
+                if ~b_swap && idx == tmp_len
+                    idxs(idx_sort(1:j)) = 1:idx;
+                    break;
+                end
+                if idx < tmp_len
+                    temp = this.inner_list(tmp_len);
+                    this.inner_list(tmp_len:(idx-1)) = this.inner_list((tmp_len+1):idx);
+                    this.inner_list(idx) = temp;
+                end
+                idxs(idx_sort(j)) = idx;
+                j = j + 1;
             end
             if nargout == 2
                 e = this.inner_list(end);
