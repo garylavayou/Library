@@ -353,8 +353,11 @@ classdef ListArray < matlab.mixin.Copyable
         
         %%%
         % insert the value at the specified location.
-        function Insert(this, value, index)    
-            value = ListArray.ASSERTCOPY(value);
+        function Insert(this, value, index, option)    
+            if nargin < 4 || ~strcmpi(option, 'copy')
+                option = 'noncopy';
+            end
+            value = ListArray.ASSERTCOPY(value, option);
             n_add = numel(value);
             this.storage((index+n_add):(end+n_add)) = this.storage(index:end);
             this.storage(index+(0:(n_add-1))) = value; 
