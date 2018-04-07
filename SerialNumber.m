@@ -4,13 +4,16 @@
 % When assert is enabled and the number space is exhausted, an error will occur.
 % As long as the space of serial number is large enough, no duplication will occur.
 %
-% See also <Identifier>
 classdef SerialNumber < matlab.mixin.Copyable  
     
     properties (Access = private)
-        identifier = uint64(0);
-        seq_max = intmax('uint64');
-        b_assert = false;
+        identifier uint64 = uint64(0);
+        seq_max uint64 = intmax('uint64');
+        b_assert logical = true;
+    end
+    
+    properties (Dependent)
+        ID;
     end
     
     methods
@@ -43,6 +46,18 @@ classdef SerialNumber < matlab.mixin.Copyable
                 n = (this.identifier+(1:uint64(Nout)))';
                 this.identifier = this.identifier+Nout;
             end
+        end
+        
+        function set.ID(this, value)
+            if isscalar(value) && value >= 0
+                this.identifier = value;
+            else
+                error("%s: invalid value for sequence number.", calledby)
+            end
+        end
+        
+        function n = get.ID(this)
+            n = this.identifier;
         end
     end
     % No member is handle class, thus no need to overload CopyElement to deep copy.
