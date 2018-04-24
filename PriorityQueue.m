@@ -202,7 +202,7 @@ classdef PriorityQueue < matlab.mixin.Copyable
                     idxs(idx_sort(1:j)) = 1:idx;
                     break;
                 end
-                if idx < tmp_len
+                if idx > tmp_len
                     temp = this.inner_list(tmp_len);
                     this.inner_list(tmp_len:(idx-1)) = this.inner_list((tmp_len+1):idx);
                     this.inner_list(idx) = temp;
