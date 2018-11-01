@@ -6,13 +6,17 @@ classdef PriorityQueue < matlab.mixin.Copyable
         inner_list;
         priority_field;
         sorttype = 'ascend';
-    end
+		end
+		
+		properties (Dependent, Access = protected)
+			storage;
+			storage_class;
+		end
     
     properties (Dependent)
         Length;
         Capacity;
         TypeName;
-        storage_class;
     end
     
     
@@ -31,6 +35,9 @@ classdef PriorityQueue < matlab.mixin.Copyable
                 type_name = varargin{1};
                 if length(varargin) >= 2
                     priority = varargin{2};
+										if ~isstruct(priority)
+											priority = struct('field', priority);
+										end
                 else
                     error('error: PriorityQueue must be specified with priority field.');
                 end
@@ -44,10 +51,8 @@ classdef PriorityQueue < matlab.mixin.Copyable
                 this.inner_list = ListArray(type_name);
             end
             
-            storage_class = meta.class.fromName(type_name);
-            if ~ismember(priority.field, {storage_class.PropertyList.Name})
-                error('error: [%] does not exist in %s.', ...
-                    priority.field, storage_class.Name);
+            if ~ismember(priority.field, {this.storage_class.PropertyList.Name})
+                error('error: [%] does not exist in %s.', priority.field, this.TypeName);
             end
             this.priority_field = priority.field;
             if isfield(priority, 'sorttype')
@@ -85,9 +90,13 @@ classdef PriorityQueue < matlab.mixin.Copyable
         end
         
         function c = get.storage_class(this)
-            c = this.inner_list.storage_class;
-        end
+            c = meta.class.fromName(this.inner_list.TypeName);
+				end
         
+				function c = get.storage(this)
+					c = this.inner_list{:};
+				end
+				
         %%%
         % idx: the added element's index in the queue
         % e: the last element of the queue.
@@ -107,7 +116,7 @@ classdef PriorityQueue < matlab.mixin.Copyable
             if old_len == 0
                 idxs = 1;
                 if nargout == 2
-                    e = this.inner_list(end);
+                    e = this.inner_list{this.Length};
                 end
                 return;
             else
@@ -119,11 +128,11 @@ classdef PriorityQueue < matlab.mixin.Copyable
                 vt = v(tmp_len-old_len);
                 for idx = tmp_len:-1:2
                     if strcmp(this.sorttype, 'descend')
-                        if  vt < this.inner_list(idx-1).(this.priority_field)
+                        if  vt < this.inner_list{idx-1}.(this.priority_field)
                             b_swap = false;
                         end
                     else  % 'ascend'
-                        if  vt > this.inner_list(idx-1).(this.priority_field)
+                        if  vt > this.inner_list{idx-1}.(this.priority_field)
                             b_swap = false;
                         end
                     end
@@ -141,15 +150,15 @@ classdef PriorityQueue < matlab.mixin.Copyable
                 end
                 % |idx| will not be empty, since we have chek it at start
                 if idx < tmp_len
-                    temp = this.inner_list(tmp_len);
-                    this.inner_list((idx+1):tmp_len) = this.inner_list(idx:(tmp_len-1));
-                    this.inner_list(idx) = temp;
+                    temp = this.inner_list{tmp_len};
+                    this.inner_list{(idx+1):tmp_len} = this.inner_list{idx:(tmp_len-1)};
+                    this.inner_list{idx} = temp;
                 end
                 idxs(idx_sort(j)) = idx;
                 j = j + 1;
             end
             if nargout == 2
-                e = this.inner_list(end);
+                e = this.inner_list{this.Length};
             end
         end
         
@@ -169,7 +178,7 @@ classdef PriorityQueue < matlab.mixin.Copyable
             if old_len == 0
                 idxs = 1;
                 if nargout == 2
-                    e = this.inner_list(end);
+                    e = this.inner_list{this.Length};
                 end
                 return;
             else
@@ -181,11 +190,11 @@ classdef PriorityQueue < matlab.mixin.Copyable
                 vt = v(tmp_len);
                 for idx = tmp_len:(this.Length-1)
                     if strcmp(this.sorttype, 'descend')
-                        if  vt > this.inner_list(idx+1).(this.priority_field)
+                        if  vt > this.inner_list{idx+1}.(this.priority_field)
                             b_swap = false;
                         end
                     else
-                        if  vt < this.inner_list(idx+1).(this.priority_field)
+                        if  vt < this.inner_list{idx+1}.(this.priority_field)
                             b_swap = false;
                         end
                     end
@@ -203,15 +212,15 @@ classdef PriorityQueue < matlab.mixin.Copyable
                     break;
                 end
                 if idx > tmp_len
-                    temp = this.inner_list(tmp_len);
-                    this.inner_list(tmp_len:(idx-1)) = this.inner_list((tmp_len+1):idx);
-                    this.inner_list(idx) = temp;
+                    temp = this.inner_list{tmp_len};
+                    this.inner_list{tmp_len:(idx-1)} = this.inner_list{(tmp_len+1):idx};
+                    this.inner_list{idx} = temp;
                 end
                 idxs(idx_sort(j)) = idx;
                 j = j + 1;
             end
             if nargout == 2
-                e = this.inner_list(end);
+                e = this.inner_list{this.Length};
             end
         end
         
@@ -223,11 +232,7 @@ classdef PriorityQueue < matlab.mixin.Copyable
             end
             
         end
-        
-        function ind = end(this,~,~)
-            ind = this.Length;
-        end
-        
+                
         function n = numArgumentsFromSubscript(~,~,indexingContext)
             switch indexingContext
                 case matlab.mixin.util.IndexingContext.Statement
@@ -237,107 +242,112 @@ classdef PriorityQueue < matlab.mixin.Copyable
                 case matlab.mixin.util.IndexingContext.Assignment
                     n = 1; % nargin for indexed assignment
             end
-        end
+				end
         
+				%%
+				% see also <ListArray>.<subsref>.
+				% varargout{1} = {queue.inner_list{idx}.(member)};
         function varargout = subsref(queue, s)
-            switch s(1).type
-                case '.'
-                    member = s(1).subs;
-                    if isprop(queue, member)
-                        assertpermission('PriorityQueue', member, 'get');
-                        varargout = {builtin('subsref',queue,s)};
-                    elseif ismethod(queue, member)
-                        assertpermission('PriorityQueue', member, 'get');
-                        if nargout == 0
-                            builtin('subsref',queue,s);
-                            varargout = cell(0);
-                        else
-                            varargout = {builtin('subsref',queue,s)};
-                        end
-                    elseif ismember(member, {queue.storage_class.PropertyList(:).Name})
-                        if queue.Length == 0
-                            varargout{1} = [];
-                        else
-                            if length(s) == 1
-                                idx = 1:queue.Length;
-                            elseif length(s) == 2 && strcmp(s(2).type, '()')
-                                idx = queue.innder_list.assertindex(s(2).subs{:});
-                            else
-                                op = '';
-                                for i = 1:length(s)
-                                    op = strcat(op, s(i).type);
-                                end
-                                error('error: unsupported operation %s%s for ListArray.', op);
-                            end
-                            if ischar(queue.inner_list(1).(member))
-                                varargout{1} = {queue.inner_list(idx).(member)};
-                            else
-                                varargout{1} = [queue.inner_list(idx).(member)];
-                            end
-                        end
-                    else
-                        error('error: no property or method is matched.');
-                    end
-                case '()'
-                    indices = s(1).subs;
-                    if length(indices) == 1
-                        idx = queue.inner_list.assertindex(indices{1});
-                        elements = queue.inner_list(idx);
-                    else
-                        error('error: Multiple indices are not supported.');
-                    end
-                    if length(s) == 1
-                        varargout{1} = elements;
-                    elseif length(s) >= 2
-                        if ismember(s(2).subs, {queue.storage_class.PropertyList(:).Name})
-                            if isempty(elements)
-                                varargout{1} = [];
-                            else
-                                subs = s(2).subs;
-                                for i=3:length(s)
-                                    subs = strcat(subs, '.', s(i).subs);
-                                end
-                                output = {elements.(subs)};
-                                if ischar(output{1})
-                                    varargout{1} = output;
-                                else
-                                    varargout{1} = [output{:}];
-                                end
-                            end
-                        else
-                            error('error: No proerty %s for %s.', ...
-                                s(2).subs, queue.inner_list.storage_class.Name);
-                        end
-                    else
-                        varargout = {builtin('subsref',queue,s)};
-                    end
-                otherwise
-                    error('error: operation %s is not supported.', s(1).type);
-            end
-        end
+					switch s(1).type
+						case '.'
+							assertpermission('PriorityQueue', s(1).subs, 'get');
+							dims = size(queue);
+							elements = cell(dims);
+							for i = 1:numel(queue)
+								elements(i) = {builtin('subsref',queue(i),s)};
+							end
+							b_concat = assertcat(elements, true);
+							varargout{1} = tryconcat(elements, dims, b_concat);
+						case '()'
+							sub_queue = queue(s(1).subs{:});
+							if length(s) == 1
+								varargout{1} = sub_queue;
+								return;
+							elseif ~isequal(s(2).type, '.')
+								error('error: only support obj(subs).name operation.');
+							end
+							assertpermission('PathList', s(2).subs, 'get');	% check the access permission							
+							dims = size(sub_queue);
+							elements = cell(dims);
+							for i = 1:numel(sub_queue)
+								elements(i) = {builtin('subsref', sub_queue(i), s(2:end))};
+							end
+							b_concat = assertcat(elements, true);
+							varargout{1} = tryconcat(elements, dims, b_concat);
+						case '{}'
+							if ~isscalar(queue)
+								error('error: ''{}'' operation only supported for scalar <PriorityQueue>.');
+							end
+							if length(s) == 1
+								if length(s(1).subs) == 1 && ischar(s(1).subs)
+									assertpermission(queue.TypeName, s(1).subs, 'get');
+								elseif length(s(1).subs) == 2 && ischar(s(1).subs{2})
+									assertpermission(queue.TypeName, s(1).subs{2}, 'get');
+								end
+							else
+								assertpermission(queue.TypeName, s(2).subs, 'get');
+							end
+							varargout = {builtin('subsref', queue.inner_list, s)};							
+						otherwise
+							error('error: operation %s is not supported.', s(1).type);
+					end
+					
+				end
         
-        function queue = subsasgn(queue, s, v)
-            switch s(1).type
-                case '.'
-                    queue = builtin('subsasgn',queue,s,v);
-                case '()'  % v is cell array
-                    if length(s) == 1
-                        indices = s(1).subs;
-                        if length(indices) == 1
-                            if isempty(v)
-                                error('error: remove elements form queue is not allowed');
-                            else
-                                queue.inner_list(indices{1}) = v;
-                            end
-                        else
-                            builtin('subsasgn',queue,s,v);
-                        end
-                    else
-                        builtin('subsasgn',queue,s,v);
-                    end
-                otherwise
-                    error('error: operation %s is not supported.', s(1).type);
-            end
+				function queue = subsasgn(queue, s, v)
+					switch s(1).type
+						case '.'
+							sub_queue = queue;
+						case '()'  % v is cell array
+							if isempty(queue) || length(s) == 1
+								queue= builtin('subsasgn', queue, s, v);
+								return;
+							end
+							sub_queue = queue(s(1).subs);
+							s = s(2:end);
+						case '{}'
+							if ~isscalar(queue)
+								error('error: ''{}'' operation only supported for scalar <PriorityQueue>.');
+							end
+							if length(s) == 1
+								if length(s(1).subs) == 1 && ischar(s(1).subs)
+									assertpermission(queue.TypeName, s(1).subs, 'set');
+								elseif length(s(1).subs) == 2 && ischar(s(1).subs{2})
+									assertpermission(queue.TypeName, s(1).subs{2}, 'set');
+								end
+							else
+								assertpermission(queue.TypeName, s(2).subs, 'set');
+							end
+							queue.inner_list = builtin('subsasgn', queue.inner_list, s, v);		
+							return;
+						otherwise
+							error('error: operation %s is not supported.', s(1).type);
+					end
+					
+					assertpermission('PriorityQueue', s(1).subs, 'set');
+					idx = 1:numel(sub_queue);
+					if ischar(v)
+						v = {v};
+					end
+					lenv = numel(v);
+					if lenv~=1 && lenv~=length(idx)
+						error('error: the number of required value is inconsistent with the supply.');
+					end
+					val = cell(size(idx));
+					for i = length(idx)
+						if isempty(v)
+							val{i} = [];
+						else
+							if iscell(v) || isstring(v)
+								val{i} = v{min(lenv, i)};
+							else
+								val{i} = v(min(lenv, i));
+							end
+						end
+					end
+					for i = 1:numel(idx)
+						sub_queue(i) = builtin('subsasgn', sub_queue(i), s, val{i});  % queue is handle, the value change takes effect
+					end
         end
         
         function Clear(this)
@@ -347,7 +357,7 @@ classdef PriorityQueue < matlab.mixin.Copyable
         function idx = Find(this, varargin)
             idx = this.inner_list.Find(varargin{:});
         end
-    end
+		end
     
 end
 

@@ -15,14 +15,17 @@ classdef ListArray < matlab.mixin.Copyable
 %             'uint8', 'uint16', 'uint32', 'uint64'};
 %     end
     
-    properties (GetAccess={?ListArray, ?PriorityQueue})
-        % |storage_class| is initialized in the constructor, should not be changed after
-        % initialization  
-        storage_class;
+    properties (Access=protected)
         st_length = 0;
-        storage;
-    end
+				storage;
+		end
     
+		properties (GetAccess = protected, SetAccess = immutable)
+			% |storage_class| is initialized in the constructor, should not be changed after
+			% initialization.
+			storage_class
+		end
+		
     properties (Dependent = true)
         Capacity;
         Length;
@@ -111,9 +114,9 @@ classdef ListArray < matlab.mixin.Copyable
             t = this.storage_class.Name;
         end
         
-        function ind = end(this,~,~)
-            ind = this.st_length;
-        end
+				%         function ind = end(this,~,~)
+				%             ind = this.st_length;
+				%         end
         
         function n = numArgumentsFromSubscript(this,s,indexingContext) %#ok<INUSL>
             switch indexingContext
@@ -159,180 +162,226 @@ classdef ListArray < matlab.mixin.Copyable
         % since the first argument noy only can be the class's instance, but also can be
         % an object array of this class.
         function varargout = subsref(list, s)
-            switch s(1).type
-                case '.'    
-                    member = s(1).subs;
-                    %disp(nargout);
-                    if isprop(list, member)
-                        % check the access permission
-                        assertpermission('ListArray', member, 'get');
-                        % further access is normal for properties.
-                        if length(s) == 1
-                            varargout = {builtin('subsref',list,s)};
-                        else
-                            temp = list.(member);
-                            varargout = {builtin('subsref',temp, s(2:end))};
-                        end
-                    elseif ismember(member, {list.storage_class.PropertyList(:).Name})
-                        % memeber is a data property 
-                        if list.st_length == 0
-                            varargout{1} = [];
-                        else
-                            if length(s) == 1
-                                idx = 1:list.st_length;
-%                                 varargout{1} = this.storage(1).(member).empty;
-%                                 for i = 1:this.st_length
-%                                     varargout{1}(i) = this.storage(i).(member);
-%                                 end
-                            elseif length(s) == 2 && strcmp(s(2).type, '()')
-                                % temp = [this.storage.(member)];
-                                % builtin('subsref', temp, s(2:end));
-                                idx = list.assertindex(s(2).subs{:});
-                            else
-                                op = '';
-                                for i = 1:length(s)
-                                    op = strcat(op, s(i).type);
-                                end
-                                error('error: unsupported operation %s%s for ListArray.', op);
-                            end
-                            if ischar(list.storage(1).(member))
-                                varargout{1} = {list.storage(idx).(member)};
-                            else
-                                varargout{1} = [list.storage(idx).(member)];
-                            end
-                        end
-                    else
-                        % Due to that we cannot recognize a non-public method, we handle
-                        % all methods with other possible cases together.
-                        assertpermission('ListArray', member, 'get');
-                        if nargout == 0
-                            builtin('subsref',list,s);
-                            varargout = cell(0);
-                        else
-                            varargout = {builtin('subsref',list,s)};
-                        end
-%                         try
-%                             varargout = {builtin('subsref',this,s)};
-%                         catch ME
-%                             switch ME.identifier
-%                                 case 'MATLAB:maxlhs'
-%                                     varargout = cell(0);
-%                                     builtin('subsref',this,s);
-%                                 otherwise
-%                                     ME.rethrow;
-%                             end
-%                         end
-                    end
-                case '()'
-                    indices = s(1).subs;
-                    if length(indices) == 1
-                        idx = list.assertindex(indices{1});
-                        elements = list.storage(idx);
-                    else
-                        error('error: Multiple indices are not supported.');
-                    end
-                    if length(s) == 1
-                        varargout{1} = elements;
-                    elseif length(s) >= 2
-                        if ismember(s(2).subs, {list.storage_class.PropertyList(:).Name})
-                            subs = s(2).subs;
-                            for i=3:length(s)
-                                subs = strcat(subs, '.', s(i).subs);
-                            end
-                            output = {elements.(subs)};
-                            
-                            % cannot use subref for elements, which only return one
-                            % value for the first element.
-                            %    output = builtin('subsref',elements,s(2:end));
-                            %    output = {subsref(elements,s(2:end))};
-                            if isempty(output)
-                                varargout{1} = output;
-                            elseif ischar(output{1})
-                                varargout{1} = output;
-                            else
-                                varargout{1} = [output{:}];
-                            end
-                        else % methods
-                            nout = numel(elements);
-                            varargout{nout} = [];
-                            for i = 1:nout
-                                output = {subsref(elements,s(2:end))};
-                                if isempty(output)
-                                    varargout{1} = output;
-                                elseif ischar(output{1})
-                                    varargout{i} = output;
-                                else
-                                    varargout{i} = [output{:}];
-                                end
-                            end
-                        end
-                    else
-                        error('error: Invalid operation.');
-                    end
-                    %                     else
-                    %                         varargout = {builtin('subsref',this,s)};
-                    %                     end
-                case '{}'
-                    % TODO, to support Obj{'propName'} to return property of all the
-                    % elements, like the Obj.propName.
-                    indices = s(1).subs;
-                    if length(indices) == 1
-                        idx = list.assertindex(indices{1});
-                        elements = list.storage(idx);
-                    else
-                        error('error: Multiple indices are not supported.');
-                    end
-                    if length(s) == 1
-                        varargout{1} = cell(length(elements),1);
-                        for i = 1:length(elements)
-                            varargout{1}{i} = elements(i);
-                        end
-                    else
-                        error('error: operation %s is not supported.', s(2).type);
-                    end
-                otherwise
-                    error('error: operation %s is not supported.', s(1).type);
-            end
+					switch s(1).type
+						case '.'
+							%% Property or Method
+							% Format:
+							%			v = list.propName;
+							%			v = list.methodName;
+							%			v = list.methodName(args);
+							%					'propName' and 'methodName' are the property and method of the
+							%					<ListArray>.
+							%					If the list is a vector, the return value must be homogeneous
+							%					and concatenatable. Otherwise, the "{}" operator should be
+							%					used instead.
+							% NOTE: list.('propName') will automatically be converted to list.propName.
+							assertpermission('ListArray', s(1).subs, 'get');  % check the access permission
+							dims = size(list);
+							elements = cell(dims);
+							for i = 1:numel(list)
+								% Retrive value for each single <ListArray> object, as the property get
+								% method or class method does not support the operation for <ListArray>
+								% array.
+								elements(i) = {builtin('subsref',list(i),s)};
+							end
+							b_concat = assertcat(elements, true);
+						case '()'
+							%% Indexing the Array of ListArray
+							% Format:
+							%			b = list(subs);
+							%					return the sub-array of the <ListArray> array.
+							%			b = list(subs).propName;
+							%			b = list(subs).methodName;
+							%					The return value must be homogeneous and concatenatable.
+							%					Otherwise, the "{}" operator should be used instead.
+							idx = list.assertindex(s(1).subs, '()');		
+							%% TODO, support multiple index for ()
+							%		subs = {list.assertindex(s(1).subs, '()')};		
+							%		l = list(subs{:});
+							sub_list = list(idx);
+							if length(s) == 1
+								varargout{1} = sub_list;
+								return;
+							elseif ~isequal(s(2).type, '.')
+								error('error: only support obj(subs).name operation.');
+							end
+							% only numeric subscription is supported here for builtin subsref
+							assertpermission('ListArray', s(2).subs, 'get')
+							dims = size(sub_list);
+							elements = cell(dims);
+							for i = 1:numel(sub_list)
+								elements(i) = {builtin('subsref', sub_list(i), s(2:end))};
+							end
+							b_concat = assertcat(elements, true);
+						case '{}'
+							%% Indexing the content of the list array
+							% Format:
+							%			v = list{subs};
+							%			v = list{'propName'}
+							%					return property of all the elements, like the Obj.propName.
+							%			v = list{subs, 'PropName'};
+							%			v = list{subs}.propName;
+							%			v = list{subs}.methodName(args);
+							%					Return value is a vector if the content of each elements is
+							%					numeric scalar; otherwise the return value is a cell array.
+							%					list can be a vector of of List Array object.
+							%
+							%	list should be a scalar ListArray object. If a list object is
+							%	non-scalar, the content should be visited via
+							%			for i = 1:length(list)
+							%				l = list(i);
+							%				v = l{subs, 'propName'};
+							%			end
+							%
+							% NOTE: the char string index in {} is enclosed in cell.
+							if ~isscalar(list)
+								error('error: ''{}'' operation only supported for scalar <ListArray>.');
+							end
+							if length(s) == 1
+								indices = s(1).subs;
+								if length(indices) == 1
+									idx = list.assertindex(indices, '{}');
+									if ischar(idx)
+										s = substruct('.', idx);
+										idx = 1:list.Length;
+									else
+										varargout = {reshape(list.storage(idx),size(idx))};
+										return;
+									end
+								elseif length(indices) == 2
+									[idx, ~] = list.assertindex(indices, '{}');
+									s = substruct('.', indices{2});
+								else
+									error('error: Too more indices supplied for obj{index, ''propName''}.');
+								end
+							elseif isequal(s(2).type, '.')
+									[idx, ~] = list.assertindex([s(1).subs,s(2).subs], '{}');
+									s = s(2:end);
+							else
+								error('error: operation %s is not supported.', [s.type]);
+							end
+							assertpermission(list.TypeName, s(1).subs, 'get')
+							dims = [numel(idx),1];
+							elements = cell(dims);
+							for i = 1:numel(idx)
+								elements(i) = {builtin('subsref', list.storage(idx(i)), s)};
+							end
+							b_concat = assertcat(elements);
+						otherwise
+							error('error: operation %s is not supported.', [s.type]);
+					end
+					
+					varargout{1} = tryconcat(elements, dims, b_concat);
         end
         
         function list = subsasgn(list, s, v)
-            switch s(1).type
-                case '.'
-                    assertpermission('ListArray', s(1).subs, 'set');
-                    list = builtin('subsasgn',list,s,v);
-                case '()'  % v is cell array
-                    % Presume that at least one subscription should be provided.
-                    indices = s(1).subs;
-                    if length(s) == 1
-                        if length(indices) == 1
-                            idx = list.assertindex(indices{1});
-                            if isempty(v)
-                                list.Remove(idx);
-                            else
-                                list.storage(idx) = v(1:length(idx));
-                            end
-                        else
-                            builtin('subsasgn',list,s,v);
-                        end
-                    elseif length(s) == 2 &&  isequal(s(2).type, '.')
-                        % If a method name is passed in, an error will be thorwn out.
-                        assertpermission(list.storage_class.Name, s(2).subs, 'set')
-                        idx = list.assertindex(indices{1});
-                        for i = 1:length(idx)
-                            %% ISSUE
-                            % ListArray has no access permission to the storage's private/protected
-                            % member, even if the caller have permission. To solve this problem, the
-                            % caller should first retrive the elements in the ListArray, then
-                            % directly access the elements' member.
-                            list.storage(idx(i)).(s(2).subs) = v(i);
-                        end
-                    else
-                        builtin('subsasgn',list,s,v);
-                    end
-                otherwise
-                    error('error: operation %s is not supported.', s(1).type);
-            end
-        end
+					s0 = s(1);
+					switch s(1).type
+						case '.'
+							%% Set ListArray Property
+							% Format:
+							%			list.propName = v;
+							sub_list = list;
+						case '()'
+							%% Modify ListArray and Its Property
+							% Format:
+							%			list(subs) = v;
+							%					return the sub-array of the <ListArray> array.
+							%			list(subs).propName = v;
+							if isempty(list) || length(s) == 1
+								list = builtin('subsasgn', list, s, v);
+								return;
+							end
+							sub_list = list(s(1).subs);   % builtin('subsref', list, s(1));
+							s = s(2:end);
+						case '{}'
+							%% Modify the content of the list array
+							% Format:
+							%			list{subs} = v;
+							%					v is a vector of the storage class.
+							%			list{'propName'} = v;
+							%					v is a vector or cell array of the propName's type.
+							%			list{subs, 'PropName'} = v;
+							%			list{subs}.PropName = v;
+							%
+							% list is a scalar.
+							% Access permission should be guaranteed.
+							if ~isscalar(list)
+								error('error: ''{}'' assign operation only supported for scalar <ListArray>.');
+							end
+							if length(s) == 1
+								indices = s(1).subs;
+								if length(indices) == 1
+									idx = list.assertindex(indices, '{}');
+									if ischar(idx)
+										idx = 1:list.Length;
+									else
+										if isempty(v)
+											list.Remove(idx);
+										else
+											list.storage(idx) = v(1:length(idx));
+										end
+										return;
+									end
+								elseif length(indices) == 2
+									[idx, ~] = list.assertindex(indices, '{}');
+									s = substruct('.', indices{2});
+								else
+									error('error: Too more indices supplied for obj{index, ''propName''}.');
+								end
+							elseif isequal(s(2).type, '.')  % certain invalid calling forms will be triggered later.
+									[idx, ~] = list.assertindex([s(1).subs,s(2).subs], '{}');
+									s = s(2:end);
+							else
+								error('error: operation %s is not supported.', [s.type]);
+							end
+						otherwise
+							error('error: operation %s is not supported.', [s.type]);
+					end
+					
+					if isscalar(idx)
+						v = {v};
+					elseif ischar(v) 
+						v = {v};
+					end
+					lenv = length(v);
+					if lenv~=1 && lenv~=length(idx)
+						error('error: the number of required value is inconsistent with the supply.');
+					end
+					val = cell(size(idx));
+					for i = length(idx)
+						if isempty(v)
+							val{i} = [];
+						else
+							if iscell(v) || isstring(v)
+								val{i} = v{min(lenv, i)};
+							else
+								val{i} = v(min(lenv, i));
+							end
+						end
+					end
+					
+					if contains(s0.type, {'.', '()'})
+						assertpermission('ListArray', s(1).subs, 'set');
+						idx = 1:numel(sub_list);
+						for i = 1:numel(idx)
+							builtin('subsasgn', sub_list(i), s, val{i});  % list is handle, the value change takes effect
+						end
+					else
+						% If a method name is passed in, an error will be thorwn out.
+						assertpermission(list.TypeName, s(1).subs, 'set')
+						for i = 1:length(idx)
+							list.storage(idx(i)) = builtin('subsasgn', list.storage(idx(i)), s, val{i}); 
+							%% Access permission
+							% ListArray has no access permission to the storage's private/protected
+							% member, even if the caller have permission. To solve this problem, use the
+							% builtin <subsasgn> function to bypass the access control.
+							%
+							%			list.storage(idx(i)).(member) = val{i};
+						end
+					end
+				end
+				
     end
     
     methods
@@ -369,6 +418,12 @@ classdef ListArray < matlab.mixin.Copyable
 %             end
 %         end
         
+				%% Remove
+				%		rmobj = Remove(this, index)
+				%		rmobj = Remove(this, obj)
+				%				Remove from list.
+				%		Remove(this, obj)
+				%				Remove from list and release the the resource of the element.
         function rmobj = Remove(this, argin)
             if isnumeric(this.storage)
                 index = argin;
@@ -409,8 +464,13 @@ classdef ListArray < matlab.mixin.Copyable
                 cap = ceil(this.st_length/this.DEFAULT_CAPACITY)*this.DEFAULT_CAPACITY;
                 this.storage((cap+1):this.Capacity) = [];
             end
-        end
+				end
         
+				%%
+				%   Find(this, field, value)
+				%				find the first occurence.
+				%		Find(this, field, value, 'all')
+				%				find all the occurence.
         function idx = Find(this, varargin)
             if isempty(varargin)
                 error('error: missing arguments.');
@@ -518,31 +578,88 @@ classdef ListArray < matlab.mixin.Copyable
         
     end
     
-    methods(Access={?ListArray, ?PriorityQueue})
-        function idx = assertindex(this, indices)
-            % indices can be empty.
-            if ischar(indices) 
-                if isequal(indices, ':')
-                    idx = 1:this.st_length;
-                    % override end method, so 'end' will not present here.
-                    %                 elseif isequal(indices, 'end')
-                    %                     idx = this.st_length;
-                else
-                    error('error: invalid index')
-                end
-            else
-                if islogical(indices)
-                    indices = find(indices);
-                end
-                if max(indices) > this.Length
-                    error('error: Index out of bound.');
-                end
-                if min(indices) <= 0
-                    error('error: negative index.');
-                end
-                idx = indices;
-            end
-        end
+    methods(Access=protected)
+			% verify the subscripts for the operator.
+        function varargout = assertindex(this, indices, op)
+					if nargin < 3
+						op = '{}';
+					end
+					if ~iscell(indices)
+						indices = {indices};
+					end
+					
+					if isequal(op, '{}')
+						if length(indices) > 2
+							error('error: only need two subscript for ''{}'' operator.');
+							end
+					elseif isequal(op, '.')
+						if length(indices) > 1
+							error('error: only need one subscript for ''.'' operator.');
+						end
+						%% TODO: () can support multiple subscripts.
+					end
+					
+					varargout = cell(1,length(indices));
+					for i = 1:length(indices)
+						index = indices{i};
+						if ischar(index)
+							if isequal(index, ':')
+								if isequal(op, '{}')
+									varargout{i} = 1:this.st_length;
+								else
+									varargout{i} = 1:numel(this);
+								end
+								% override end method, so 'end' will not present here.
+								%                 elseif isequal(indices, 'end')
+								%                     idx = this.st_length;
+							else
+								if isequal(op, '{}') && ...
+										(contains(index, {this.storage_class.PropertyList.Name}) || ...
+										contains(index, {this.storage_class.MethodList.Name}))
+									% Member name of storage class
+									varargout{i} = index;
+								elseif isequal(op, '.') && ...
+										(isprop(this(1), index) || ismethod(this(1), index))
+									varargout{i} = index;
+								else
+									error('error: invalid subscript <%s> for ''%s'' operator', index, op);
+								end
+							end
+						else
+							if isequal(op, '.')
+								error('error: the subscript must be char type for ''.'' operator.');
+							end
+							if islogical(index)
+								if (isequal(op, '()') && length(index) ~= numel(this)) ||...
+										(isequal(op, '{}') && length(index) ~= numel(this.st_length))
+									error('error: inconsistent diemensions between subscript and array.');
+								end
+								index = find(index);
+							end
+							if isequal(op, '()') && max(index) > numel(this) ||...
+								isequal(op, '{}') && max(index) > this.Length
+								error('error: Index out of bound.');
+							end
+							if min(index) <= 0
+								error('error: negative index.');
+							end
+							varargout{i} = index;             % indices can be empty.
+						end
+					end
+						
+					if nargin >=3
+						if isequal(op, '{}')  && length(indices) == 2
+							if ~isnumeric(varargout{1})
+								error('error: the first index should be numeric for obj{index, ''propName''}.');
+							end
+							if ~ischar(varargout{2})
+								error('error: the second index should be char string for obj{index, ''propName''}.');
+							end
+						end
+					end
+				
+				end
+				
     end
 end
 
