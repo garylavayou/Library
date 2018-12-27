@@ -2,6 +2,9 @@
 % Wrapper of object array, with only one dimension, i.e. a list or vector.
 % Dynamically increase storage, but the storage will not imediately be returned when
 % elements are removed.
+%
+% NOTE: ListArray requires the contents have the common superclass derevied from the
+% <matlab.mixin.Heterogeneous> class, so that the data can be saved with object array.
 % See also <RawList>: use cell array as inner storage; <List>: strict type control
 %% TODO
 % provide some access function for WapperClasses, such as, <PriortyQueue>
@@ -44,37 +47,36 @@ classdef ListArray < matlab.mixin.Copyable
             if isempty(varargin)
                 warning('ListArray is initialized with specifed type (default double).');
             end
-            if ischar(varargin{1})
-                type_name = varargin{1};
-                if length(varargin) >= 2
-                    value = varargin{2};
-                else 
-                    value = [];
-                end
-                if length(varargin) >= 3
-                    this.DEFAULT_CAPACITY = varargin{3};
-                end
-                this.storage_class = meta.class.fromName(type_name);
-            else
-                % first argument is value, no type name present
-                value = varargin{1};
-                if isa(value, 'ListArray')
-                    this = value.copy;
-                    return;
-                end
-                if isempty(value)
-                    error('error: Input arguments not enough.');
-                end
-                this.storage_class = metaclass(value);
-                if length(varargin) >= 2
-                    this.DEFAULT_CAPACITY = varargin{2};
-                end                    
-            end
-            this.storage = creatempty(this.TypeName);
-             
-            if ~isempty(value)
-                this.Add(value);
-            end
+						if ischar(varargin{1})		% type_name
+							type_name = varargin{1};
+							if length(varargin) >= 2
+								value = varargin{2};
+							else
+								value = [];
+							end
+							if length(varargin) >= 3
+								this.DEFAULT_CAPACITY = varargin{3};
+							end
+							this.storage_class = meta.class.fromName(type_name);
+						else
+							% first argument is value, no type name present
+							value = varargin{1};
+							if isa(value, 'ListArray')
+								this = value.copy;
+								return;
+							end
+							if isempty(value)
+								error('error: Input arguments not enough.');
+							end
+							this.storage_class = metaclass(value);
+							if length(varargin) >= 2
+								this.DEFAULT_CAPACITY = varargin{2};
+							end
+						end
+						
+						if ~isempty(value)
+							this.Add(value);
+						end
         end
         
         function delete(this)
@@ -178,13 +180,23 @@ classdef ListArray < matlab.mixin.Copyable
 							assertpermission('ListArray', s(1).subs, 'get');  % check the access permission
 							dims = size(list);
 							elements = cell(dims);
+							nout = 1;
 							for i = 1:numel(list)
 								% Retrive value for each single <ListArray> object, as the property get
 								% method or class method does not support the operation for <ListArray>
 								% array.
-								elements(i) = {builtin('subsref',list(i),s)};
+								try 
+									elements(i) = {builtin('subsref',list(i),s)};
+								catch me
+									if isequal(me.identifier, 'MATLAB:maxlhs') 
+										nout = 0;
+										builtin('subsref',list(i),s); % the statement not executed
+									else
+										rethrow(me);
+									end
+								end
 							end
-							b_concat = assertcat(elements, true);
+							ifwarning = true;
 						case '()'
 							%% Indexing the Array of ListArray
 							% Format:
@@ -209,10 +221,20 @@ classdef ListArray < matlab.mixin.Copyable
 							assertpermission('ListArray', s(2).subs, 'get')
 							dims = size(sub_list);
 							elements = cell(dims);
+							nout = 1;
 							for i = 1:numel(sub_list)
-								elements(i) = {builtin('subsref', sub_list(i), s(2:end))};
+								try 
+									elements(i) = {builtin('subsref', sub_list(i), s(2:end))};
+								catch me
+									if isequal(me.identifier, 'MATLAB:maxlhs')
+										nout = 0;
+										builtin('subsref', sub_list(i), s(2:end)); % the statement not executed
+									else
+										rethrow(me);
+									end
+								end
 							end
-							b_concat = assertcat(elements, true);
+							ifwarning = true;
 						case '{}'
 							%% Indexing the content of the list array
 							% Format:
@@ -263,15 +285,29 @@ classdef ListArray < matlab.mixin.Copyable
 							assertpermission(list.TypeName, s(1).subs, 'get')
 							dims = [numel(idx),1];
 							elements = cell(dims);
+							nout = 1;
 							for i = 1:numel(idx)
-								elements(i) = {builtin('subsref', list.storage(idx(i)), s)};
+								try
+									elements(i) = {builtin('subsref', list.storage(idx(i)), s)};
+								catch me
+									if isequal(me.identifier, 'MATLAB:maxlhs')
+										nout = 0;
+										builtin('subsref', list.storage(idx(i)), s); % the statement not executed
+									else
+										rethrow(me);
+									end
+								end
 							end
-							b_concat = assertcat(elements);
+							ifwarning = false;
 						otherwise
 							error('error: operation %s is not supported.', [s.type]);
 					end
-					
-					varargout{1} = tryconcat(elements, dims, b_concat);
+					if nout == 1
+						b_concat = assertcat(elements, ifwarning);
+						varargout{1} = tryconcat(elements, dims, b_concat);
+					else
+						varargout = cell(0);
+					end
         end
         
         function list = subsasgn(list, s, v)
@@ -389,10 +425,19 @@ classdef ListArray < matlab.mixin.Copyable
         % Default data pass: directly store the argument value to the container.
         % If |option='copy'|, then handle classes with copy method will create a copyed
         % version of the input argument.
-        function value = Add(this, value, option)
-            if nargin < 3 || ~strcmpi(option, 'copy')
-                option = 'noncopy';
-            end
+				function value = Add(this, value, option)
+					if nargin < 3 || ~strcmpi(option, 'copy')
+						option = 'noncopy';
+					end
+					if this.Capacity == 0
+						if isa(value, this.TypeName)
+							this.storage = creatempty(class(value));
+						else
+							error('error: incompatible class <%s>.', class(value))
+						end
+						% if the input value is not compatible with exsiting elements, an error
+						% occurs.
+					end
             % The value assign will examine the type compatibility.
             value = ListArray.ASSERTCOPY(value, option);
             n_add = numel(value);
@@ -631,26 +676,27 @@ classdef ListArray < matlab.mixin.Copyable
 							end
 							if islogical(index)
 								if (isequal(op, '()') && length(index) ~= numel(this)) ||...
-										(isequal(op, '{}') && length(index) ~= numel(this.st_length))
+										(isequal(op, '{}') && length(index) ~= this.st_length)
 									error('error: inconsistent diemensions between subscript and array.');
 								end
-								index = find(index);
+								varargout{i} = find(index);
+							else
+								if isequal(op, '()') && max(index) > numel(this) ||...
+										isequal(op, '{}') && max(index) > this.Length
+									error('error: Index out of bound.');
+								end
+								if min(index) <= 0
+									error('error: negative index.');
+								end
+								varargout{i} = index;             % indices can be empty, numeric or logical
 							end
-							if isequal(op, '()') && max(index) > numel(this) ||...
-								isequal(op, '{}') && max(index) > this.Length
-								error('error: Index out of bound.');
-							end
-							if min(index) <= 0
-								error('error: negative index.');
-							end
-							varargout{i} = index;             % indices can be empty.
 						end
 					end
 						
 					if nargin >=3
 						if isequal(op, '{}')  && length(indices) == 2
 							if ~isnumeric(varargout{1})
-								error('error: the first index should be numeric for obj{index, ''propName''}.');
+								error('error: the first index should be numeric/logical for obj{index, ''propName''}.');
 							end
 							if ~ischar(varargout{2})
 								error('error: the second index should be char string for obj{index, ''propName''}.');

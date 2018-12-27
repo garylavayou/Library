@@ -253,11 +253,25 @@ classdef PriorityQueue < matlab.mixin.Copyable
 							assertpermission('PriorityQueue', s(1).subs, 'get');
 							dims = size(queue);
 							elements = cell(dims);
+							nout = 1;
 							for i = 1:numel(queue)
+								try  
 								elements(i) = {builtin('subsref',queue(i),s)};
+								catch me
+									if isequal(me.identifier, 'MATLAB:maxlhs')
+										nout = 0;
+										builtin('subsref',queue(i),s); % the statement not executed
+									else
+										rethrow(me);
+									end
+								end
 							end
-							b_concat = assertcat(elements, true);
-							varargout{1} = tryconcat(elements, dims, b_concat);
+							if nout == 1
+								b_concat = assertcat(elements, true);
+								varargout{1} = tryconcat(elements, dims, b_concat);
+							else
+								varargout = cell(0);
+							end
 						case '()'
 							sub_queue = queue(s(1).subs{:});
 							if length(s) == 1
@@ -269,11 +283,25 @@ classdef PriorityQueue < matlab.mixin.Copyable
 							assertpermission('PathList', s(2).subs, 'get');	% check the access permission							
 							dims = size(sub_queue);
 							elements = cell(dims);
+							nout = 1;
 							for i = 1:numel(sub_queue)
-								elements(i) = {builtin('subsref', sub_queue(i), s(2:end))};
+								try
+									elements(i) = {builtin('subsref', sub_queue(i), s(2:end))};
+								catch me
+									if isequal(me.identifier, 'MATLAB:maxlhs')
+										nout = 0;
+										builtin('subsref', sub_queue(i), s(2:end));
+									else
+										rethrow(me);
+									end
+								end
 							end
-							b_concat = assertcat(elements, true);
-							varargout{1} = tryconcat(elements, dims, b_concat);
+							if nout == 1
+								b_concat = assertcat(elements, true);
+								varargout{1} = tryconcat(elements, dims, b_concat);
+							else
+								varargout = cell(0);
+							end
 						case '{}'
 							if ~isscalar(queue)
 								error('error: ''{}'' operation only supported for scalar <PriorityQueue>.');
@@ -287,7 +315,16 @@ classdef PriorityQueue < matlab.mixin.Copyable
 							else
 								assertpermission(queue.TypeName, s(2).subs, 'get');
 							end
-							varargout = {builtin('subsref', queue.inner_list, s)};							
+							try 
+								varargout = {builtin('subsref', queue.inner_list, s)};
+							catch me
+								if isequal(me.identifier, 'MATLAB:maxlhs')
+									varargout = cell(0);
+									builtin('subsref', queue.inner_list, s);
+								else
+									rethrow(me);
+								end
+							end
 						otherwise
 							error('error: operation %s is not supported.', s(1).type);
 					end
