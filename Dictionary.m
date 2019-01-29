@@ -232,15 +232,19 @@ classdef Dictionary < matlab.mixin.Copyable
 		end
 		
 		function tf = isfield(this, field)
-			tf = builtin('isfield', this.data, field);
+			tf = isfield(this.data, field);
 		end
 		
 		function value = getfield(this, field)
-			value = builtin('getfield', this.data, field);
+      % cmd_path = fullfile(matlabroot, '\toolbox\matlab\datatypes');
+      % old_path = cd(cmd_path);
+			% value = builtin('getfield', this.data, field);
+      value = getfield(this.data, field); %#ok<GFLD>  
+      % cd(old_path);
 		end
 		
-		function rmfield(this, field)
-			this.data = builtin('rmfield', this.data, field);
+		function this = rmfield(this, field)
+      this.data = rmfield(this.data, field);   % rmfield for structure
 		end
 		
 		function this = rmstructfields(this, rm_fields)
@@ -248,7 +252,7 @@ classdef Dictionary < matlab.mixin.Copyable
 		end
 		
 		function names = fieldnames(this)
-			names = builtin('fieldnames', this.data);
+			names = fieldnames(this.data);
 		end
 		
 		function this = erase(this)

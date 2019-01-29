@@ -1,5 +1,5 @@
 global total_iter_num progress_bar;
-total_iter_num = 0;
+total_iter_num = 1;
 if exist('progress_bar', 'var') && ~isempty(progress_bar) ...
 		&& isvalid(progress_bar)	
 	waitbar(0, progress_bar, ...
@@ -10,3 +10,4 @@ else
 	jframe=getJFrame(progress_bar);
 	jframe.setAlwaysOnTop(1);
 end
+pause(0.01);
